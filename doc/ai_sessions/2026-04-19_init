@@ -1,0 +1,615 @@
+USER:
+<environment_context>
+  <cwd>/mnt/local/n/jack/m/projects/personal/dcl_react_2026-04-14</cwd>
+  <shell>bash</shell>
+  <current_date>2026-04-19</current_date>
+  <timezone>America/New_York</timezone>
+</environment_context>
+
+USER:
+Are there already purely declarative programming languages being used to write reactive programs?
+
+ASSISTANT:
+Yes.
+
+Purely declarative languages have been used for reactive programming for a long time, especially in the **functional reactive programming (FRP)** world. Examples include:
+
+- **Elm** (purely functional, reactive UI architecture)
+- **Lucid Synchrone / Lustre**-style synchronous dataflow languages (declarative reactive systems, often embedded/safety-critical)
+- **Fran / Yampa** (Haskell FRP libraries; host language is pure functional)
+- **Flapjax** and related research DSLs (declarative event/dataflow style)
+
+If you mean “purely declarative” very strictly (no escape hatches/imperative interop at all), most real-world systems still include some imperative boundary for I/O, but the core reactive logic can be fully declarative.
+
+USER:
+Can they execute in browsers?
+
+ASSISTANT:
+Some can, with caveats.
+
+- **Elm**: Yes, runs in browsers by compiling to JavaScript.
+- **Haskell FRP (e.g., Yampa/Reflex)**: Indirectly, usually via **GHCJS** or **WebAssembly** toolchains, but setup is heavier.
+- **Lustre/Lucid Synchrone-family**: Usually targets embedded/native systems, not typical browser deployment.
+
+So for practical browser use today, **Elm is the clearest declarative reactive option**.
+
+USER:
+<environment_context>
+  <shell>bash</shell>
+  <current_date>2026-04-20</current_date>
+  <timezone>America/New_York</timezone>
+</environment_context>
+
+USER:
+If I keep this session opoen, but don't prompt you for a while, is the meter running?
+
+ASSISTANT:
+Yes. In most setups, usage is metered while a session remains active, not only when you send prompts.
+
+Exact billing behavior depends on your platform/account plan, so check your provider’s pricing docs for the precise rule (idle timeout, minimums, etc.).
+
+USER:
+Is the random function in Elm impure?
+
+ASSISTANT:
+Not in Elm user code.
+
+`Random` in Elm is exposed as a **pure generator description** (`Generator a`). The actual entropy/effect happens only when you ask the runtime to execute it (typically via `Cmd`), so your Elm functions stay pure.
+
+USER:
+What is Cmd?
+
+ASSISTANT:
+`Cmd msg` in Elm is a value that tells the runtime: “perform this side effect, and later send back a `msg`.”
+
+Think of it as a **declaration of work**, not the work itself.
+
+Common uses:
+- HTTP requests
+- Random number generation
+- Time (`Time.now`)
+- Ports to JS
+
+In The Elm Architecture:
+- `init : ... -> (Model, Cmd msg)`
+- `update : Msg -> Model -> (Model, Cmd Msg)`
+
+`Cmd.none` means “do no effects.”
+
+USER:
+When the message is sent back, how is it received?
+
+ASSISTANT:
+Through your app’s `update` function.
+
+Flow:
+
+1. You return a `Cmd Msg` from `init` or `update`.
+2. Elm runtime executes it (HTTP, random, time, etc.).
+3. When it completes, runtime constructs a `Msg` (using your tagger, like `GotRandom Int`).
+4. Runtime calls `update : Msg -> Model -> (Model, Cmd Msg)` with that message.
+
+So it’s “received” the same way as button clicks and other events: as an input `Msg` to `update`.
+
+USER:
+Can an HTTP server be written in Elm?
+
+ASSISTANT:
+Not as a normal production backend, no.
+
+Elm is designed primarily for browser frontends, and it does not provide general server-side networking APIs for building an HTTP server directly.
+
+You can:
+- Write Elm for the client UI.
+- Use ports to talk to JavaScript in Node, but then the actual server is effectively in JS/Node.
+
+So in practice, HTTP servers are built in other languages, with Elm on the frontend.
+
+USER:
+So you could write a server that is partly in JS but has some logic expressed in Elm?
+
+ASSISTANT:
+Yes, that’s possible.
+
+Typical shape:
+
+- **Node/JS owns HTTP** (routing, sockets, middleware, DB drivers).
+- **Elm holds pure domain logic** (validation, state transitions, business rules).
+- JS calls compiled Elm code (or via ports pattern), then continues I/O work.
+
+So it can be “partly in JS, partly in Elm,” but the runtime/server plumbing remains JS.
+
+USER:
+I suppose this could be done based on Deno; Node would not be required.
+
+ASSISTANT:
+Correct. It does not have to be Node specifically.
+
+If you can run the compiled Elm JavaScript and wire the boundary code, **Deno can play the same host role** (HTTP + I/O in Deno, pure logic in Elm). Node is just the more common ecosystem path.
+
+USER:
+So it seems that when programmers use Elm to code for interactions with some kind of outside world that insists on mutating itself from time to time and stimulating the system, being able to cope with that depends on an "architecture" that requires writing the Elm code as a function to transform a "model" and an input message to a new version of the model, and there's always a view function to expose the model to the user's view. And the programmer has to describe a data type that encompasses the entire vocabulary of the stimuli the system can receive from the outside world and act on.
+
+ASSISTANT:
+Yes, that’s essentially The Elm Architecture.
+
+You’ve got the core pieces right:
+
+- `Model`: full app state.
+- `Msg`: tagged union of all inputs/events you handle.
+- `update : Msg -> Model -> (Model, Cmd Msg)`: pure state transition.
+- `view : Model -> Html Msg`: renders UI and emits messages from user events.
+- `subscriptions : Model -> Sub Msg` (optional): declares external event streams (time, websockets, etc.).
+
+One nuance: `Msg` covers the stimuli your program chooses to handle, not literally every possible outside-world event. But conceptually, it is your app’s input vocabulary.
+
+USER:
+Is that architure adequate for complex applications, the sort that programmers would tend to break up into modules if using a more common programming language?
+
+ASSISTANT:
+Yes, it can be adequate for complex apps, and Elm apps are commonly split into modules.
+
+Typical scaling pattern:
+
+- Feature modules own their own `Model`, `Msg`, `update`, and `view`.
+- A root module composes them into a larger app model.
+- Parent `Msg` wraps child messages (`ChildMsg Child.Msg`), and uses `Html.map`, `Cmd.map`, `Sub.map` to route them.
+- Shared domain types/utilities live in separate modules.
+
+So you still get modular structure; it’s just done through typed composition rather than ad hoc mutable objects.
+
+Real tradeoff: very large `Msg` trees and boilerplate can grow, but many teams find the explicitness worth it for maintainability.
+
+USER:
+Elm programs seem to consist of equations, which define names as denoting values. Can there be more than one namespace for these names?
+
+ASSISTANT:
+Yes.
+
+Elm has multiple naming scopes/namespaces in practice:
+
+- **Module namespace**: each file is a module (`MyApp.Page.Home`), and names are qualified by module.
+- **Value/type namespaces**: value names and type names are distinct categories.
+- **Local scopes**: `let`, function arguments, `case` branches introduce nested scopes.
+- **Record field names**: field labels are their own kind of names used in record access/update.
+
+So names are not all in one global namespace.
+
+USER:
+For a web page, the vocabulary of inputs is effetively one namespace, though, is it not?
+
+ASSISTANT:
+At the top level, yes: your app processes a single `Msg` stream, so there is one root input vocabulary.
+
+But you usually structure it as nested vocabularies:
+
+- Each feature/module defines its own `Msg`.
+- The root `Msg` wraps those (`UserMsg User.Msg`, `CartMsg Cart.Msg`, etc.).
+
+So operationally it’s one incoming channel, but architecturally it can be many module-local namespaces composed into one.
+
+USER:
+Implementation of the views must be using comparisons to avoid repainting the whole screen when some little thing changes.
+
+ASSISTANT:
+Yes. Elm avoids full redraws by using a virtual DOM diff step.
+
+`view` recomputes a new virtual tree, then Elm compares old vs new and applies only minimal DOM patches. The browser then repaints only affected regions. You can further help it with `Html.Keyed` and `Html.Lazy` in places where identity/laziness matters.
+
+USER:
+Have some people written accounts of having found Elm a poor fit to what they wanted to do?
+
+ASSISTANT:
+Yes.
+
+There are many reports/blog posts from developers who liked Elm’s reliability but found it a poor fit for certain needs, commonly:
+
+- Heavy JS interop or complex third-party UI integrations
+- Backend/full-stack use (Elm is frontend-focused)
+- Ecosystem/package-size limits compared with JS/TS
+- Perceived boilerplate in large apps
+- Language constraints they wanted to bypass (no ad hoc side effects, limited metaprogramming abstractions)
+
+So sentiment is mixed: strong fit for some teams/apps, frustrating for others.
+
+USER:
+How does boilerplate arise?
+
+ASSISTANT:
+Mostly from explicit wiring, not from algorithmic code.
+
+Common sources in Elm:
+
+- Defining many `Msg` variants for UI and async outcomes (`Loading`, `Success`, `Failure`, etc.).
+- Repeating `update` branches that unpack/wrap child module messages.
+- Parent-child plumbing with `Html.map`, `Cmd.map`, `Sub.map`.
+- Copying similar `Model`/decoder/encoder/type definitions across features.
+- TEA ceremony for simple actions (new message + update case + maybe command).
+
+That verbosity is often the tradeoff for Elm’s clarity and compile-time safety.
+
+USER:
+What is "TEA"?
+
+ASSISTANT:
+`TEA` = **The Elm Architecture**.
+
+It’s the standard Elm app pattern built from:
+
+- `Model` (state)
+- `Msg` (events/messages)
+- `update` (state transition)
+- `view` (UI from state)
+- plus `Cmd`/`Sub` for effects and external events.
+
+USER:
+I can't paste text into these prompts?
+
+ASSISTANT:
+You should be able to paste normally, so if it’s failing it’s likely a client/UI issue, not an Elm issue.
+
+Quick checks:
+1. Use keyboard paste (`Ctrl+V` on Windows/Linux, `Cmd+V` on macOS).
+2. Try plain text paste (`Ctrl+Shift+V` in some apps).
+3. Refresh/reopen the session tab.
+4. Check whether the prompt box is actually focused.
+5. Try a different browser/app to isolate extension or clipboard conflicts.
+
+If you tell me what app/browser you’re using, I can give targeted fixes.
+
+USER:
+I'm using the CLI in interactive mode. When I try ctrl-v, it acts as though I am trying to paste an image and it complains that there is no image in the clipboard (which is true, since what is in there is plain text).
+
+ASSISTANT:
+That behavior is expected in the Codex CLI: `Ctrl+V` is bound to image paste.
+
+Use your terminal emulator’s paste shortcut instead:
+
+- Linux/Windows terminal: `Ctrl+Shift+V` (or `Shift+Insert`)
+- macOS terminal: `Cmd+V`
+- Also works: right-click paste
+
+If you’re inside `tmux`, keep using the terminal’s paste shortcut (`Ctrl+Shift+V` / `Cmd+V`), not `Ctrl+V`.
+
+USER:
+OK, so in the example at https://guide.elm-lang.org/effects/random , we see that the type of the update function is declared as `Msg -> Model -> (Model, Cmd Msg)`. So this means that when the update function is called by the "architecture", it can supply a "command", which must be executed by the environment, right?
+
+ASSISTANT:
+Exactly.
+
+`update` returns two things:
+
+- the new `Model`
+- a `Cmd Msg` describing an effect for the runtime to perform
+
+So yes, Elm runtime (the “environment”/architecture) executes that command, and when it finishes, it sends back a `Msg` to `update`. 
+
+One precision: `update` does not *execute* the command itself; it only *declares* it.
+
+USER:
+The design of Elm seems influenced by languages like Haskell and Miranda and ML.
+
+ASSISTANT:
+Yes, that’s a fair read.
+
+Elm is strongly influenced by the ML/Haskell family: algebraic data types, pattern matching, immutable values, type inference, and emphasis on pure functions. It packages those ideas with a stricter, UX-focused architecture (TEA) for frontend apps.
+
+USER:
+Also, it uses Currying instead of multiple arguments.
+
+ASSISTANT:
+Yes. Elm functions are curried by default, so a “two-argument” function is really a function returning another function.
+
+Example: `add : Int -> Int -> Int` can be partially applied (`add 1`) to get a new function.
+
+USER:
+In Elm, can the body of a function definition define and use local names?
+
+ASSISTANT:
+Yes. Use a `let ... in` expression.
+
+```elm
+f x =
+    let
+        y = x + 1
+        z = y * 2
+    in
+    z - 3
+```
+
+`y` and `z` are local to that expression.
+
+USER:
+In Elm syntax, do line breaks and indentation signify?
+
+ASSISTANT:
+Yes. Like Haskell/Python, Elm uses layout rules, so line breaks and indentation matter.
+
+- Indentation groups declarations/branches (`let` blocks, `case` branches, etc.).
+- Newlines separate declarations and expressions in many contexts.
+- You don’t use `{}` or `;` for normal block structure.
+
+So formatting is not just style; it carries syntax.
+
+USER:
+Is there a way to insert an insignificant line break? In Ruby this can be done with a backslash.
+
+ASSISTANT:
+Not with a Ruby-style backslash. Elm has no explicit “line continuation” character.
+
+A newline is usually fine when the parser can see the expression is incomplete (for example after `=` or an operator), and you can always use parentheses to make breaks unambiguous. Indentation still has to be valid for the surrounding block.
+
+USER:
+Evidently in Elm, all arguments are, in principle, possible to copy. So we could write for example
+
+ASSISTANT:
+Yes, conceptually.
+
+Elm values are immutable, so passing an argument is semantically like passing a copy: callee cannot mutate caller state. In practice, the runtime can reuse/shared structure internally for efficiency, because immutability makes that safe. So you get copy-like reasoning without always paying full deep-copy cost.
+
+USER:
+I have been used to interacting with Chat GPT, in which, I could insert newlines without ending the prompt, and I could enclose code examples in lines with the three backticks. Can I do that here?
+
+ASSISTANT:
+Yes, you can do both in the CLI.
+
+- Newlines: press `Enter` for a newline and use the submit keybinding when ready (often `Ctrl+D` or `Meta+Enter`, depending on CLI/editor mode).
+- Code fences: triple backticks work normally in the prompt, e.g.
+
+```text
+```elm
+add x y =
+    x + y
+```
+```
+
+If you want, I can help you check the exact submit/newline keys for your specific terminal + Codex CLI config.
+
+USER:
+I'm on Xubuntu; it has maybe a simpler terminal emulator than some of the other OS that people run.
+
+ASSISTANT:
+That’s fine; Xubuntu terminal is enough.
+
+For `xfce4-terminal` + Codex CLI, practical keys are:
+
+- Paste text: `Ctrl+Shift+V` (or `Shift+Insert`)
+- Submit prompt: `Enter`
+- Insert literal newline without submitting: `Ctrl+J` (works in many readline-style prompts)
+
+And yes, triple backticks are supported when you paste/type:
+
+````
+```elm
+f x =
+    let
+        y = x + 1
+    in
+    y
+```
+````
+
+If `Ctrl+J` doesn’t work in your specific setup, I can help you check your exact keybindings quickly.
+
+USER:
+Let's
+try
+it.
+Yes, seems to work.
+
+ASSISTANT:
+Great. Multi-line input is working in your setup.
+
+USER:
+Is this valid Elm?
+```
+
+ASSISTANT:
+I only see the opening code fence, not the Elm snippet yet.
+
+Paste the full code block (including the closing ```), and I’ll check validity precisely.
+
+USER:
+Oops, I meant
+```
+dup : a -> (a, a)
+dup arg = (arg, arg)
+```
+
+ASSISTANT:
+Yes, that is valid Elm.
+
+```elm
+dup : a -> (a, a)
+dup arg =
+    ( arg, arg )
+```
+
+It defines a polymorphic function that takes any value and returns a pair containing it twice.
+
+USER:
+And it can be called with any Elm value, which illustrates that all values can be duplicated.
+
+ASSISTANT:
+Yes, exactly.
+
+`dup : a -> (a, a)` works for any Elm type, showing values are unrestricted for duplication (no linear/affine restrictions).  
+For functions, it duplicates the function reference as a value as well.
+
+USER:
+Let's imagine a logic language. Its syntax distinguishes between value contexts and command contexts. A command can be a call to a procedure. Procedures receive named arguments. The body of a procedure definition can identify and use intermediate flows. Names could be used for these, but I am trying to avoid pinning down the concrete syntax. Values that can be copied belong to "asker" types. A command form should be available that generates an asker/teller pair. The teller can also be passed as an argument. An argument or other flow must not be copied, nor dropped on the floor. It carries the capability to be bound to a value, exactly once. When it is bound to a value, its corresponding asker flow is known to have that value. So long as the value of a flow is not known, any conditional that depends on its value is suspended. It should be possible to stage races deliberately and explicitly (using a stream of "oracles" supplied from the environment), but the language should not lend itself to accidental races. Am I making sense, so far?
+
+ASSISTANT:
+Yes, you’re making sense.
+
+What you described is a coherent design space combining:
+
+- Declarative/dataflow evaluation (suspend until needed value is known)
+- Single-assignment variables (`asker`/`teller` resembles read/write ends of a logic variable or promise)
+- Linearity/affinity for tellers (must be used exactly once: no copy, no drop)
+- Explicit effect separation (value vs command contexts)
+- Controlled nondeterminism (races only through explicit oracle inputs)
+
+So this is not confused at all; it reads like a disciplined concurrent logic language with linear capabilities and explicit scheduling entropy.
+
+USER:
+If there are record or tuple types, it's possible to construct a list. A teller to a list of data that can signify commands can amount in effect to a "reference" to an "object" (effectively mutable!). I think the Lucy/Janus paper by Ken Kahn and Vijay Saraswat describes this.
+
+ASSISTANT:
+Yes, that’s exactly the classic move.
+
+A single-assignment system can still encode object-like mutable behavior by passing around a `teller` for a stream (or tail) of messages/commands. Each “update” extends the stream, so state evolution is represented over time, not by in-place mutation. Observationally, that behaves like a reference/object.
+
+That is very much in the spirit of Kahn/Saraswat concurrent-constraint and Janus/Lucy-style accounts: mutation as protocol over channels/logic variables, with sequencing and races controlled by the communication structure.
+
+USER:
+If the language didn't have at least as good a static type system as Elm has, it would be a waste, I think. But the type system would have to extend to take linearity into account. This could get complex when we have records or tuples of mixed copyable and linear types of data in them.
+
+ASSISTANT:
+Agreed. If you want this to be practical, you need a strong HM-style core plus linear typing.
+
+The usual way to keep it manageable is:
+
+- Split kinds/usage: copyable (`Un`) vs linear (`Lin`) types.
+- Type constructors declare usage behavior: e.g. tuple/record is linear if any field is linear, unless you add finer-grained field usage tracking.
+- Functions carry usage in arrows: unrestricted `a -> b` vs linear `a ⊸ b` (or equivalent).
+- Pattern matching must consume linear fields exactly once.
+- Provide explicit combinators for restructuring linear records/tuples so programmers do not fight the checker.
+
+So yes, mixed records/tuples are where complexity appears first, but this is a solved research area if you adopt a clear usage-kinding discipline early.
+
+USER:
+I think the evolution of a running system could be captured as transactions. If these were spooled into persistent storage (e. g. disk), the distinction between primary and secondary memory could be hidden from the programmer. But my intuition suggests that many of the transactions that a naive implementation would generate would not have to be saved, as their effects might soon be captured by later transactions and so parts of the history could be elided without losing data affecting future outputs of the evolving system.
+
+ASSISTANT:
+Yes, that intuition is solid.
+
+What you’re describing is basically:
+
+- `append-only transaction log` for durability/replay
+- `compaction` to drop redundant history
+- `snapshots/checkpoints` so replay is bounded
+
+You can safely elide history when later transactions are a semantic summary of earlier ones for all future observable behaviors. The hard part is defining “observable” correctly:
+
+- Internal state only: aggressive compaction is often safe.
+- External effects (I/O already emitted): those become part of history and cannot be erased as if they never happened.
+- Nondeterminism/oracles: you must persist enough oracle decisions to preserve replay equivalence.
+
+So yes, primary vs secondary memory can be largely hidden, but you need a precise compaction law (equational/observational) to stay correct.
+
+USER:
+Syntactic sugaring could be used to permit functional notation, based on the semantics already discussed.
+
+ASSISTANT:
+Yes. That’s a good direction.
+
+You can treat functional notation as sugar over your core command/dataflow calculus, as long as desugaring preserves:
+
+- linear-use obligations (no copy/drop of linear flows),
+- suspension semantics (wait-on-unknown),
+- and explicit race/oracle points.
+
+That gives programmers Elm-like ergonomics while keeping the stricter core semantics.
+
+USER:
+Some of the writings of Saraswat and Kahn seem to have been lost. I was unable to recover a complete definition of their Janus language. But you are saying this kind of approach is a solved research area.
+
+ASSISTANT:
+“Solved” was too broad if interpreted as “one finished, canonical design you can just copy.”
+
+More precise:
+
+- **Solved at the principles level**: linear types, single-assignment/dataflow variables, session/capability ideas, and deterministic cores with explicit nondeterminism are all well-developed research areas.
+- **Not solved as one standard language design**: combining all of that into one ergonomic, mainstream language (with great tooling, persistence model, module system, etc.) is still a design/engineering frontier.
+- **Janus specifically**: even if the original presentation is hard to recover, you can reconstruct much of the space from adjacent work (concurrent constraint programming, linear logic type systems, session-typed process calculi, and modern linear languages like Rust/Granule/Austral-inspired designs).
+
+So your project is on solid theoretical ground, but there is still real language-design work to do.
+
+USER:
+I thought Rust was an imperative language with some static safeguards to work out who owns what memory and should be in charge of freeing it.
+
+ASSISTANT:
+That’s correct.
+
+Rust is primarily an imperative, multi-paradigm systems language. Its ownership/borrowing system is mainly about memory and aliasing safety (plus data-race prevention), not about being a declarative single-assignment/dataflow language.
+
+It is related to your topic only in the sense that it mainstreamed practical linear/affine resource tracking ideas. But semantically, Rust and the language design you’re describing are very different.
+
+USER:
+<environment_context>
+  <shell>bash</shell>
+  <current_date>2026-04-21</current_date>
+  <timezone>America/New_York</timezone>
+</environment_context>
+
+USER:
+How does the term "affine" apply here? In this context, is it another word for "linear", or is there a different shade of meaning?
+
+ASSISTANT:
+Different shade of meaning.
+
+- **Linear**: must use exactly once (no copy, no drop).
+- **Affine**: may use at most once (no copy, but dropping is allowed).
+
+So every linear value is non-copyable, but affine is weaker because it permits “not using” the value.
+
+In your earlier model (“must not be copied, nor dropped”), that is **linear**, not merely affine.
+
+USER:
+Another property that I would like a programming language to have is a definite model of what happens if code is changed in a running system. This is useful for if there is an integrated development environment (IDE) for the language. The only language I know of that has this is Erlang. I don't know whether lessons from how Erlang handles the problem can be applied to a concurrent-constraint language using single-assignment variables (or flows) with separated asker/teller references.
+
+ASSISTANT:
+Yes, lessons transfer, but not verbatim.
+
+Erlang’s useful ideas are:
+
+- Versioned code identity (old/new module versions coexist briefly)
+- Explicit state migration points
+- Per-process gradual cutover instead of global stop-the-world
+- Protocol compatibility across versions
+
+For your concurrent-constraint + single-assignment setting, a workable model is:
+
+1. Version every procedure/predicate definition.
+2. Freeze only upgrade boundaries (not the whole system): new calls use new code, in-flight calls finish on old code.
+3. Treat long-lived interactions as protocol endpoints with versioned adapters.
+4. Require explicit migration functions for persistent state representations.
+5. Define what happens to suspended computations waiting on unknown flows:
+   - either they resume under the code version they were created with, or
+   - they are reinterpreted via a declared rewrite/migration rule.
+6. Make oracle/race decisions version-stable (log enough to replay deterministically across upgrade).
+
+Main hard part versus Erlang: suspended constraints may embed assumptions from old code, so you need a first-class semantic rule for “old suspended goal meets new definitions.” If you specify that clearly, hot upgrade is very feasible in this paradigm.
+
+USER:
+Who gets credit for the concept of "oracle" as we are using it here?
+
+ASSISTANT:
+For the term **“oracle”** itself in computation, credit is usually given to **Alan Turing** (1939), in the context of *oracle machines* (relative computability).
+
+In programming-language semantics, using an “oracle” as an explicit source of external choices/nondeterminism is more of a later adaptation of that idea rather than a single new coinage with one clear inventor.
+
+USER:
+I think I first encountered it in the Fudgets thesis by Carlsson.
+
+ASSISTANT:
+That makes sense. In the Fudgets context (Thomas Hallgren / Magnus Carlsson era), “oracle” is used in the PL-semantics style: an abstract source of external choices so the core model stays pure/deterministic-conditioned-on-oracle.
+
+So your memory is plausible: not the origin of the term, but a concrete and influential use of it in reactive functional programming.
+
+USER:
+As I understand it, in any programming system that can handle "reactive" requirements, it is possible to stage a computational race. Two processes can be started and the program can react when one finishes before the other. In a purely declarative notation (functional or logical), a collection of oracles can stand in as the supposed source of the knowledge of which computation finishes first.
+
+ASSISTANT:
+Yes, that’s a good formulation.
+
+A reactive system needs some notion of external timing/order, so “which finishes first” introduces nondeterministic choice unless you model time/cost explicitly. In declarative semantics, representing that choice via an oracle stream is a standard way to keep the core language pure while still accounting for races.
+
+So you can have:
+
+- deterministic core relation/function, and
+- explicit oracle input supplying tie-break/arrival-order facts.
+
+Then races are not “mysterious effects”; they are data the program is parameterized over.
+
