@@ -1,0 +1,15 @@
+default_permissions = "project-only"
+approval_policy = "never"
+
+[permissions.project-only]
+description = "Read and write only within the current workspace"
+
+[permissions.project-only.filesystem]
+":minimal" = "read"
+
+[permissions.project-only.filesystem.":workspace_roots"]
+"." = "write"
+
+[permissions.project-only.network]
+enabled = false
+

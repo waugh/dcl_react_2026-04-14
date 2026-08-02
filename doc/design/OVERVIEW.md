@@ -1,4 +1,4 @@
-﻿# Find or invent a programming language
+﻿# Find or invent a programming language or a family of programming languages
 ## Goals
 - Programming language for general purposes.
 - Allows to program reactive processes (can react to stimuli from the environment and to the amount of time that computations take to complete).
@@ -25,7 +25,6 @@
 - A concrete model of hot code updates, including versioning rules, migration behavior, and what happens to suspended computations during upgrade.
 - Persistence via transactions, with explicit criteria for compaction/elision of history that does not affect future observable behavior.
 - Modular composition model for large applications, to avoid architecture-level boilerplate.
-- Maybe, include functional-style notation as syntactic sugar over the core semantics, while preserving linearity and suspension behavior? Or alternatively, allow functional-type results all the way down.
-
+- Two "object"-like concepts: an immutable object (which is a value that includes or points to methods), and a "process" consuming a linked list of messages. In the latter case, a method passes the rest of the message list to the next state.
 
 > Written with [StackEdit](https://stackedit.io/) and with OpenAI Codex CLI.

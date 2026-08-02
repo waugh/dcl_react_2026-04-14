@@ -1,0 +1,299 @@
+• Yes—the configuration issue is resolved. I can see the project tree,
+  including:
+
+  - README.md, LICENSE, prompt
+  - doc/design/OVERVIEW.md
+  - doc/design/phase_01.md
+  - doc/design/deposit_ex.js
+  - The doc/ai_sessions and doc/snip_ai materials
+
+  I’m ready to read the design documents.
+
+
+› Great! It took a while to get the configuration straightened out, but here we
+  are. Please start with `doc/design/OVERVIEW.md` and `doc/design/
+  phase_01.md` .
+
+
+• I’ll read both documents in full, taking the overview as the project’s
+  governing context and phase_01.md as the immediate design agenda. Then I’ll
+  reflect back my understanding and engage with its questions.
+
+• I’ve read both documents. My central understanding is that Phase 01 is not a
+  disposable low-level prototype: it is meant to expose the project’s
+  declarative semantics cleanly, without yet solving static typing or
+  imperative-looking convenience.
+
+  Several initial conclusions stand out.
+
+  - Dynamic typing need not infect the execution model with exceptions. A
+  single-assignment cell can resolve to either a value or a failure. Failure is
+  then stable information, just like a value: readers awaken and propagate it
+  rather than remaining suspended forever. Supervision can decide whether to
+  replace a failed process, report the failure, or deliberately leave part of
+  the computation failed. Erlang contributes useful supervision ideas, but
+  ordinary “let it crash” is insufficient because this language must account for
+  dependent suspended computations.
+  - Ordered, oracle-free process communication should be the ordinary case. A
+  linear channel naturally represents the right to append the next message, and
+  each send yields its successor channel. A bag is mathematically possible as a
+  collection, but choosing which available message a stateful process observes
+  next becomes nondeterministic whenever that choice affects behavior. Such a
+  channel therefore either needs an oracle capability or must guarantee
+  confluence. That makes it valuable but not the conceptual default.
+  - Replies should probably be explicit tellers, at least initially. This keeps
+  process sending conceptually uniform: consume the current sending capability,
+  produce the successor capability, and optionally place an answer into a
+  separately supplied cell. It avoids pretending that a process interaction
+  behaves like an ordinary function call.
+  - The surface language can nevertheless hide successor-channel plumbing
+  through static elaboration. For example, a sequence resembling Smalltalk’s
+  semicolon cascade could mean “send these messages through successive states”:
+
+  account
+      withdraw: amount reply-to: answer ;
+      request-balance reply-to: balance .
+
+  This could elaborate into fresh hidden channels account₀ → account₁ →
+  account₂. It would not mutate account, duplicate it, or represent one runtime
+  flow multiple times. The notation would be declarative sequencing imposed by
+  the linear protocol.
+
+  - I would keep expression elaboration capable of producing multiple semantic
+  components. That is a powerful bridge between pleasant notation and a linear
+  execution model. A source-level name need not denote exactly one runtime
+  value; it can denote a statically known bundle whose components are consumed
+  separately. Eventually, the type system can make that structure explicit and
+  safe.
+  - I would postpone assigning universal meaning to bare juxtaposition.
+  Smalltalk-style a b is attractive for immutable objects, but process messages
+  introduce continuation ownership, possible tellers, blocking, and failure.
+  Deciding first what a send elaborates into will make it much easier to decide
+  whether a b is honest notation for it—or merely visually familiar.
+
+  For comments, I mildly prefer # for line comments. It is conspicuous,
+  economical, and especially natural in a whitespace-delimited language. Named
+  symbols can use a construct that does not consume such valuable lexical
+  territory. Nested /* ... */ comments also seem reasonable, though requiring
+  whitespace around the delimiters would be surprising when writing prose or
+  temporarily commenting out punctuation-heavy code.
+
+  The most productive next design step seems to be defining one small process
+  protocol and writing several candidate notations for:
+
+  1. creating or obtaining its initial sending capability;
+  2. sending one message;
+  3. receiving a reply through a teller;
+  4. sending several ordered messages;
+  5. deliberately racing messages;
+  6. observing a process or message failure.
+
+  That exercise should expose whether Smalltalk-like juxtaposition and cascades
+  genuinely fit the semantics.
+
+
+› I approve those answers and soon, we'll incorporate them in the documents and
+  remove the questions therefrom. ¶ For copyable values, I could decide to
+  require the copying to be explicated by the programmer with the use of a
+  copying operator. But I'm thinking to just say that if the compiler sees
+  multiple asking references to a name that represents a flow, it will generate
+  any necessary copying operations for whatever is the next layer down in
+  realizing the semantics. ¶ I have started trying to compose the example of a
+  simple class of process based on immutable objects to support method calls.
+  This will be the classic simple bank-account example. Smalltalk and Self have
+  unary message sending syntax and keyword message-sending syntax as separate
+  syntaxes. I'm thinking my message-send syntax will start with the receiver,
+  then there will be a "verb", then some keywords with a flow after each (which
+  could be a teller). Do you think that is an OK syntax, at least to try for a
+  while? If so, should the selector consist only of the verb, or also the
+  keywords in order? ¶ A word consisting of only letters, digits, and
+  underline, not starting in a digit, is an identifier. If we see "!" as a word
+  followed by an identifier, the identifier denotes a flow, and the reference
+  with "!" is the teller, and the other references denote the asker.
+
+
+• I’ll look at the bank-account draft so the syntax advice is grounded in the
+  notation you have actually begun, then I’ll address copying, selector
+  identity, and the ! teller convention together.
+
+• Yes, that message syntax is a strong candidate to try:
+
+  account deposit amount quantity reply ! answer .
+
+  I would make the selector consist of the verb plus the ordered keywords. Here
+  its identity would be something like:
+
+  deposit amount reply
+
+  The supplied flows are not part of the selector. A unary message has only its
+  verb as selector.
+
+  Including the keywords has several advantages:
+
+  - They become semantic protocol elements rather than optional documentation.
+  - Messages with the same verb but different shapes remain distinguishable.
+  - Reordered arguments cannot silently call the same method incorrectly.
+  - Dispatch can identify the message without inspecting argument values.
+  - Protocol declarations, reflection, and later static checking get stable
+  names.
+
+  Conceptually, a message could elaborate to:
+
+  receiver: account
+  selector: [deposit amount reply]
+  arguments: [quantity !answer]
+
+  The grammar is especially clean if a message is a verb followed by zero or
+  more keyword flow pairs. Nested expressions may eventually introduce
+  ambiguity, but that can be addressed after the atomic-flow form has taught us
+  more.
+
+  Your proposed implicit copying rule also seems right. Multiple asker
+  occurrences should invoke the structural rule of contraction automatically.
+  Importantly, “copying” need not mean physically copying a resolved immutable
+  value. The lower layer might:
+
+  - fan out an unresolved flow to multiple askers;
+  - share an immutable resolved representation;
+  - structurally copy a representation when necessary.
+
+  The source semantics merely promise that each asker receives equivalent
+  information. An explicit copying operator would expose implementation plumbing
+  and clutter ordinary declarative programs. Later, the type system can reject
+  multiple asker occurrences when the flow contains linear components and
+  therefore is not copyable. During the dynamically typed phase, such misuse can
+  become a well-defined runtime failure.
+
+  The teller notation is compact and fits the lexical model:
+
+  ! answer
+
+  I would define it specifically as a reference mode, not an operation on the
+  value carried by answer:
+
+  - answer denotes an asking reference.
+  - ! answer denotes the corresponding telling reference.
+
+  That makes the asymmetry very visible while leaving ordinary data dependencies
+  pleasantly quiet. It also permits the compiler to count teller and asker uses
+  independently. One remaining design question will be how a fresh flow—and
+  therefore its paired rights—is introduced, but that need not alter this
+  reference syntax.
+
+
+› OK. So I need a syntax for composing an immutable object. C has structures.
+  Early versions of C++ were called "C with classes". They introduced classes
+  by expanding on the notion of structure in C to add methods. In JS, the
+  "object" notion primitively acts as a structure, using the "." operator to
+  extract a component. JS objects also support the "." ... "(" ... ")" operator
+  to
+  make a method call. So these precedents show that it is possible to have one
+  kind of thing that works as a primitive structure and as an object that can
+  receive and execute method calls. On the other hand, I could choose to have
+  one kind of value that is only a primitive structure, and another kind that
+  can be referenced only as a receiver of calls. In this case, its methods
+  would have to be able to access internal component values or flows that would
+  be inaccessible from outside. Self does not have an explicit operator like
+  JS's "." for extracting components primitively. Instead, Self makes access to
+  components look like method calls. I like the advantages that that confers
+  and maybe can do something similar.
+
+  Composing an immutable object could look either different or the same when it
+  is done as a command to be executed at runtime *vs* when it is done at
+  compile time to produce an artifact of computer programming. In the latter
+  case, it would be useful to be able to compose different parts of the object
+  at different places in the code, similiar to how a class can be "reoopened"
+  in Ruby to add methods to it.
+
+
+• I would use one uniform source-level notion of immutable object, while
+  allowing the implementation to represent simple objects as primitive records
+  when possible.
+
+  A public component would be a unary message. Thus:
+
+  account balance
+
+  does not primitively extract a field. It sends the selector balance. The slot
+  might contain a constant value, a flow, or computed behavior; callers cannot
+  distinguish these cases. This gives you Self’s useful freedom to replace
+  stored data with computation without changing client code.
+
+  An object could semantically contain:
+
+  - Public slots indexed by selectors.
+  - Methods implementing keyword selectors.
+  - Private lexical bindings captured by those methods.
+  - Optionally, parent/delegation slots later.
+
+  Private state need not be represented as specially protected public slots. It
+  can simply reside in the lexical environment used while composing the object.
+  A method can see it; callers cannot name it as a message selector.
+
+  For example, without committing to punctuation:
+
+  -object
+      balance = initial-balance
+      deposit amount reply = deposit-method
+  /object
+
+  Here balance is a unary selector, while deposit amount reply is a keyword
+  selector. Reading a constant slot and invoking a method use the same message
+  syntax.
+
+  Runtime and compile-time composition should share an algebra but not
+  necessarily denote the same kind of result:
+
+  - Runtime composition produces a new immutable object value.
+  - Compile-time composition produces or extends a program artifact from which
+    values may later be constructed.
+
+  The essential composition operation is merging selector-to-implementation
+  maps. Because declarations generally run concurrently and order should not
+  matter, reopening must not use Ruby’s “last definition wins” behavior. The
+  merge should be commutative:
+
+  - Disjoint selectors combine.
+  - Identical repeated contributions might be accepted.
+  - Conflicting definitions of the same selector are errors.
+  - An explicit overriding construct, if ever added, must express precedence
+    deliberately.
+
+  That gives useful open composition without making meaning depend on source
+  order.
+
+  I would also distinguish openness from perpetual mutability. An artifact could
+  collect fragments during assembly and then be sealed:
+
+  BankAccount +: first-fragment .
+  BankAccount +: deposit-fragment .
+  BankAccount +: reporting-fragment .
+  BankAccount seal .
+
+  Those marks are merely illustrative. The semantic idea is that multiple
+  declarations constrain one artifact, rather than successively mutating it.
+  Sealing establishes the complete selector set, supports separate compilation,
+  and gives hot-update versioning a definite boundary.
+
+  There is a useful symmetry here:
+
+  compose fragments → immutable object
+  compose declarations → immutable program artifact
+
+  The same object-body notation could be used in both contexts, with the
+  surrounding binding determining the phase. I would favor that unless phase
+  confusion appears in examples.
+
+  One capability caveat is important: an object containing only copyable values
+  and asker references can itself be copyable. An object whose method closes
+  over a teller or another linear capability becomes linear as a whole. The
+  eventual type system should derive that property structurally; during this
+  dynamic phase, composition can retain runtime capability information and
+  reject an illegal duplication.
+
+  So my provisional direction would be: primitive records may exist in the
+  semantic machinery, but the normal language surface exposes immutable slot
+  objects, and all public observation occurs through message sending. Compile-
+  time reopening then becomes order-independent composition of object fragments,
+  followed by an explicit or contextual sealing boundary.
+
