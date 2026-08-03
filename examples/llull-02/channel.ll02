@@ -1,0 +1,43 @@
+/*
+  Here we show that a message channel, which can form the basis of, in effect,
+  references to mutable object-like processes (in the style of Kahn and
+  Saraswat), can be implemented on top of the primitive concepts provided by
+  Llull-02.
+  Note that the channel preserves the order of the messages it carries.
+
+  No way is proposed (as yet) to close off a channel so as to indicate that there
+  will be no more messages. But a reason to do that might conceivably arise
+  as we explore applications.
+
+  The strategy of this implementation involves our use of a record pattern
+  {
+    car,
+    cdr
+  }.
+
+  An asker to such a record will represent the authority to receive a message.
+  When there is no message available yet, the asker will remain unresolved.
+  Once it is resolved, it will carry an instance of the structure. The
+  `car` field will provide the message, and the `cdr` field the next
+  representation of the channel, for receiving the next message, if any.
+
+  The sending authority will be represented by the teller corresponding to the
+  above-mentioned asker.
+
+  There is no need to export any programming artifacts hence, as client code
+  can directly implement the operations, using the above structure as a guide.
+
+  Example of sending a message:
+
+    _next_account := ! next_account .
+    _my_account := {
+      car : {
+        verb : # deposit ,
+        params_args : [
+          amount : $20.59 ,
+          _response : ! what_happen ,
+        ] ,
+      } ,
+      cdr : next_account
+    } .
+*/
