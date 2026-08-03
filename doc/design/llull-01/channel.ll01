@@ -1,0 +1,82 @@
+/*
+  Here we implement an ability to create channels to carry messages for
+  simulating references to mutable objects, or we could say processes.
+  A channel is similar to a "bird" in Toontalk. In Toontalk, it is a primitive,
+  but here, we build it from simpler concepts. The idea of representing a
+  channel as a linked list is from Saraswat and Kahn or maybe even earlier work
+  by other writers.
+
+  Creating a channel provides objects to use as the sending and receiving ends
+  of the channel. Either of these, when exercised, returns the next version
+  of itself for use to send or receive the next message.
+
+  Currently, there is no notion of marking the end of a stream of messages.
+
+  The strategy here is to use a private flow, called the _bridge_, to link
+  the sending and receiving ends. The sending end holds the teller to the
+  bridge and the receiving end holds the asker. In a channel's initial state,
+  the bridge is not bound to any value yet. Calling on the receiving end while
+  the channel is in this state would block. Calling the sending end results in
+  binding the bridge to a node containing the message and the asker to the
+  next bridge.
+
+  This is not necessarily the most elegant solution. However, we think it
+  demonstrates that some of the language fundamentals as we have thought of
+  them up to now suffice to build channels, and so notions of mutable objects
+  can be built from notions of immutable objects based on pure declarative
+  notation. Still to do, however, to complete the capabilities that references
+  to mutable objects should provide, is to build a merging capability (In
+  ToonTalk, this is done by using Maggie, the magic wand, to "duplicate" a
+  bird).
+*/
+-export Channel .
+-private Aux .
+Aux +: {
+  cons with_car with_cdr do:
+    ^ {
+      -private payload ^ with_car ,
+      -private successor ^ with_cdr ,
+      -public snoc into_car into_cdr do:
+        ^ -void .
+        into_car bind to payload .
+        into_cdr bind to successor .
+        -pragma # consumed .
+      /done , // snoc
+    } . // ^
+  /done , // cons
+  make_receiving_end with_bridge do:
+    ^ {
+      -private bridge ^ with_bridge ,
+      receive into_message into_next do:
+        ^ -void .
+        bridge snoc into_car into_message into_cdr ! next_bridge .
+        into_next bind to ( Aux make_receiving_end with_bridge next_bridge ) .
+        -pragma # consumed .
+      /done , // receive
+    } . // ^
+  /done , // make_receiving_end
+  make_sending_end into_bridge do: ^ {
+    -private _bridge ^ into_bridge ,
+    -public send verb as: arg_verb with as: arg_with do:
+      -declare new_bridge .
+      _bridge bind to ( Aux cons
+        with_car {
+          verb ^ arg_verb ,
+          with ^ arg_with ,
+        } // with_car
+        with_cdr new_bridge
+      ) . // _bridge bind to cons
+      -pragma # consumed .
+      ^ Aux make_sending_end into_bridge ! new_bridge .
+    } . /done , // send
+  /done , // make_sending_end
+} .
+Channel +: {
+  new into_sending_end into_receiving_end do:
+    -declare root .
+    into_receiving_end bind to ( Aux make_receiving_end with_bridge root ) .
+    into_sending_end bind to ( Aux make_sending_end into_bridge ! root ) .
+    ^ -void .
+  /do ,
+} .
+
