@@ -84,7 +84,7 @@ The project's prior art, bibliography, and focused research notes are collected 
 ## Repository organization
 
 - `README.md` describes the language family's shared goals and semantics.
-- `doc/` contains design material and records of development sessions.
+- `doc/exploration/` contains the modular glossary, design sections, and question indices; other material under `doc/` records references and development history.
 - `examples/` contains dialect-specific source examples.
 - `archive/` preserves work on design branches that are no longer active.
 
